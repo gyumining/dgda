@@ -3791,11 +3791,10 @@
         window.addEventListener('load', () => {
             renderTenantUrls();
 
-            // 공개 시연용: 방문자가 빈 화면을 보지 않도록 진단 결과를 미리 채워 둔다.
-            // 첫 화면은 New Assessment 그대로 두어 '진단 수행' 인터랙션을 남긴다.
-            isDemoMode = true;
-            _runWithMockData(['okta', 'github', 'cloudflare', 'onepassword']);
-            renderAssessmentResult({ focusSummary: false, baseline: true });
+            // 첫 화면은 빈 상태로 둔다 — '진단 수행'을 눌러야 결과가 채워지는 것이
+            // 시연 흐름(선택 → 실행 → 결과)을 보여주기에 더 좋다.
+            // 각 화면의 빈 상태 문구("진단을 수행하면 표시됩니다")가 그 전까지의 안내를 맡는다.
+            renderDetailedTable();
 
             lucide.createIcons();
         });
