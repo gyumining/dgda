@@ -14,10 +14,15 @@
     <meta property="og:site_name" content="Team Dgda · SSPM Console">
     <meta property="og:title" content="SSPM Console — SaaS 보안 컴플라이언스 진단">
     <meta property="og:description" content="4개 SaaS의 보안 설정을 ISMS-P 기준으로 자동 진단하고, 부적합 항목의 조치 우선순위를 제시합니다. 브라우저에서 바로 시연해 보세요.">
+    <meta property="og:url" content="https://gyumining.github.io/dgda/">
+    <meta property="og:image" content="https://gyumining.github.io/dgda/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
     <meta property="og:locale" content="ko_KR">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="SSPM Console — SaaS 보안 컴플라이언스 진단">
     <meta name="twitter:description" content="4개 SaaS의 보안 설정을 ISMS-P 기준으로 자동 진단하고, 부적합 항목의 조치 우선순위를 제시합니다.">
+    <meta name="twitter:image" content="https://gyumining.github.io/dgda/og-image.png">
 
     <!-- 파비콘: 외부 파일 없이 단일 HTML로 배포되도록 인라인 SVG 사용 -->
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%238b5cf6'/%3E%3Cpath d='M16 6l7 3v6.5c0 4.4-2.9 8.2-7 9.4-4.1-1.2-7-5-7-9.4V9l7-3z' fill='none' stroke='%23fff' stroke-width='2.1' stroke-linejoin='round'/%3E%3Cpath d='M12.6 15.8l2.5 2.5 4.3-4.6' fill='none' stroke='%23fff' stroke-width='2.1' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
@@ -1939,7 +1944,7 @@
                 </div>
                 <div class="document-title">진단 대상 설정 및 수행<button class="info-btn" data-info="tab1" aria-expanded="false" aria-label="화면 설명 보기"><i data-lucide="info"></i></button></div>
                 <div class="document-subtitle">
-                    타겟 SaaS 환경을 선택하고 자격 증명을 입력한 후 자동 진단을 실행합니다.
+                    타겟 SaaS 환경을 선택하고 테넌트 URL을 확인한 후 자동 진단을 실행합니다.
                 </div>
             </div>
 
@@ -2318,7 +2323,7 @@
         let closedTabs = new Set();
         // 백엔드 없이 실제 진단 결과 데이터셋으로 동작 중인지 — 화면에 명시하기 위한 플래그
         let isDemoMode = false;
-        let filteredRows = [];   // Detailed Report에 현재 표시 중인 행 (CSV 내보내기 대상)
+        let filteredRows = [];   // Detailed Report에 현재 표시 중인 행 (PDF 내보내기 대상)
         // 진단 실행 이력 — 기준 데이터셋 1건 + 방문자가 세션 중 재실행한 기록이 쌓인다.
         // 존재하지 않는 과거 진단을 만들어 넣지 않는다 (보고서와 교차 확인되는 공개 채널).
         let assessmentHistory = [];
@@ -2484,7 +2489,6 @@
             document.querySelectorAll('.tenant-url-row input').forEach(inp => {
                 tenantUrls[inp.dataset.saas] = inp.value.trim();
             });
-            const apiToken = document.getElementById('apiTokenInput')?.value?.trim() || '';
 
             const steps = saasList.map((s, i) =>
                 `[${i+1}/${saasList.length}] Connecting to ${s.charAt(0).toUpperCase()+s.slice(1)}...`
@@ -2505,7 +2509,7 @@
                     body: JSON.stringify({
                         saas_list:   saasList,
                         tenant_urls: tenantUrls,
-                        api_token:   apiToken
+                        api_token:   ''   // 데모 UI에는 토큰 입력이 없다 — 백엔드 연동 시 입력 필드와 함께 복원
                     })
                 });
 
@@ -2594,8 +2598,9 @@
             liveData    = sel;
             summaryData = {
                 total: sel.length, passed, failed, collected, manual, pass_rate: rate,
-                // 조치 우선순위: 부적합→즉시(High), 수집완료→30일 검토(Medium), 적합·수동확인→분기(Low)
-                priority: { high: failed, medium: collected, low: passed + manual },
+                // 조치 우선순위: 부적합→즉시(High), 수집완료→30일 검토(Medium), 수동확인→분기(Low)
+                // 적합(O)은 조치 대상이 아니다 — Master Plan 간트와 같은 기준
+                priority: { high: failed, medium: collected, low: manual },
                 // 실제 수집이 이뤄진 시각을 그대로 쓴다 (보고서 Cover 시트와 일치)
                 generated_at: ASSESSMENT_META.generated_at,
                 saas_stats: {}
@@ -2617,6 +2622,13 @@
         /* ============================================
            5-1. Executive Summary 동적 업데이트
            ============================================ */
+        /* 'YYYY. M. D. 오전/오후 h:mm:ss' 라벨에서 날짜부만 뽑는다.
+           split(' ')[0]은 ko-KR 표기가 공백으로 조각나 'YYYY.'만 남는다. */
+        function dateOnly(src) {
+            const m = String(src).match(/^\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\./);
+            return m ? m[0].replace(/\s+/g, ' ') : String(src);
+        }
+
         function updateSummaryView(s) {
             if (!s) return;
 
@@ -2656,7 +2668,7 @@
             const elGen  = document.getElementById('report-generated-at');
             const elDate = document.getElementById('report-findings-date');
             if (elGen)  elGen.textContent  = 'Generated ' + s.generated_at;
-            if (elDate) elDate.textContent = 'Findings Report · ' + s.generated_at.split(' ')[0];
+            if (elDate) elDate.textContent = 'Findings Report · ' + dateOnly(s.generated_at);
 
             const elHL = document.getElementById('exec-headline-body');
             if (elHL) {
@@ -2678,9 +2690,6 @@
 
             const elAI = document.getElementById('action-item-count');
             if (elAI) elAI.textContent = failRows.length;
-
-            const elFDate = document.getElementById('report-findings-date');
-            if (elFDate) elFDate.textContent = 'Findings Report · ' + s.generated_at.split(' ')[0];
 
             const elCrit = document.getElementById('kpi-critical-label');
             if (elCrit) elCrit.textContent = `수집완료 ${collRows.length} · 수동확인 ${manRows.length}`;
@@ -2814,9 +2823,26 @@
         let doughnutChartInst = null;
         let barChartInst = null;
 
+        /* 차트 색은 렌더 시점의 CSS 변수에서 읽는다.
+           하드코딩하면 라이트 모드에서 밝은 회색 글자·다크 테두리가 그대로 남는다. */
+        function chartTheme() {
+            const css = getComputedStyle(document.body);
+            const v = name => css.getPropertyValue(name).trim();
+            return {
+                text:      v('--text-normal'),
+                muted:     v('--text-muted'),
+                bright:    v('--text-bright'),
+                surface:   v('--bg-secondary'),   // 도넛 조각 사이 테두리 = 카드 배경색
+                tooltipBg: v('--bg-tertiary'),
+                border:    v('--border'),
+                grid:      v('--border') + '80'   // 6자리 hex 전제 — 50% 알파
+            };
+        }
+
         function renderCharts(s) {
             const data = s || summaryData;   // 탭 전환 시 인자 없이 호출돼도 전역값 사용
-            Chart.defaults.color = '#9a9a9a';
+            const th = chartTheme();
+            Chart.defaults.color = th.muted;
             Chart.defaults.font.family = "'IBM Plex Sans', sans-serif";
             Chart.defaults.font.size = 12;
             // 시스템 응답은 빠르게 — 기본 1000ms 차트 애니메이션을 400ms로 단축
@@ -2840,7 +2866,7 @@
                     type: 'doughnut',
                     data: {
                         labels: ['데이터 없음'],
-                        datasets: [{ data: [1], backgroundColor: ['#363636'], borderColor: '#252525', borderWidth: 3 }]
+                        datasets: [{ data: [1], backgroundColor: [th.border], borderColor: th.surface, borderWidth: 3 }]
                     },
                     options: {
                         responsive: true, maintainAspectRatio: false, cutout: '72%',
@@ -2862,10 +2888,10 @@
                     datasets: [{
                         data: [passVal, failVal, collVal, manVal],
                         backgroundColor: ['#10b981', '#f43f5e', '#f59e0b', '#3b82f6'],
-                        borderColor: '#252525',
+                        borderColor: th.surface,
                         borderWidth: 3,
                         hoverOffset: 8,
-                        hoverBorderColor: '#252525'
+                        hoverBorderColor: th.surface
                     }]
                 },
                 options: {
@@ -2882,8 +2908,8 @@
                             }
                         },
                         tooltip: {
-                            backgroundColor: '#1a1a1a', borderColor: '#363636', borderWidth: 1,
-                            padding: 12, titleColor: '#fff', bodyColor: '#dcddde',
+                            backgroundColor: th.tooltipBg, borderColor: th.border, borderWidth: 1,
+                            padding: 12, titleColor: th.bright, bodyColor: th.text,
                             displayColors: true, boxPadding: 6,
                             callbacks: {
                                 label: (ctx) => ` ${ctx.label}: ${ctx.parsed}건 (${total ? ((ctx.parsed/total)*100).toFixed(1) : 0}%)`
@@ -2896,10 +2922,11 @@
             const ctxBar = document.getElementById('barChart').getContext('2d');
             if (barChartInst) barChartInst.destroy();
 
-            // 조치 우선순위: X→즉시(High), C→30일 검토(Medium), O·M→분기(Low)
+            // 조치 우선순위: X→즉시(High), C→30일 검토(Medium), M→분기(Low)
+            // 적합(O)은 조치 대상에서 제외 — Master Plan 요약 카드와 합이 일치해야 한다
             const highVal = failVal;
             const medVal  = collVal;
-            const lowVal  = passVal + manVal;
+            const lowVal  = manVal;
             const maxVal  = Math.max(highVal, medVal, lowVal, 1);
             const xMax    = maxVal + Math.max(1, Math.ceil(maxVal * 0.3));
 
@@ -2919,8 +2946,8 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            backgroundColor: '#1a1a1a', borderColor: '#363636', borderWidth: 1,
-                            padding: 12, titleColor: '#fff', bodyColor: '#dcddde',
+                            backgroundColor: th.tooltipBg, borderColor: th.border, borderWidth: 1,
+                            padding: 12, titleColor: th.bright, bodyColor: th.text,
                             callbacks: { label: (ctx) => `  조치 항목: ${ctx.parsed.x}건` }
                         }
                     },
@@ -2928,18 +2955,18 @@
                         x: {
                             beginAtZero: true,
                             max: xMax,
-                            grid: { color: 'rgba(54,54,54,0.5)', drawBorder: false },
+                            grid: { color: th.grid, drawBorder: false },
                             ticks: {
                                 stepSize: 1,
                                 padding: 6,
-                                color: '#9a9a9a',
+                                color: th.muted,
                                 callback: (v) => Number.isInteger(v) ? v : ''
                             },
                             border: { display: false }
                         },
                         y: {
                             grid: { display: false },
-                            ticks: { color: '#dcddde', font: { weight: '700', size: 12, family: "'JetBrains Mono'" }, padding: 8 },
+                            ticks: { color: th.text, font: { weight: '700', size: 12, family: "'JetBrains Mono'" }, padding: 8 },
                             border: { display: false }
                         }
                     },
@@ -2952,7 +2979,7 @@
                                 meta.data.forEach((bar, idx) => {
                                     const val = dataset.data[idx];
                                     if (!val) return;
-                                    ctx2.fillStyle = '#dcddde';
+                                    ctx2.fillStyle = th.text;
                                     ctx2.font = '600 12px \'JetBrains Mono\', monospace';
                                     ctx2.textAlign = 'left';
                                     ctx2.fillText(val + '건', bar.x + 6, bar.y + 4.5);
@@ -3039,7 +3066,7 @@
                 return textMatch && statusMatch && saasMatch && areaMatch && ismsMatch;
             });
 
-            filteredRows = rows;   // CSV 내보내기가 화면과 같은 범위를 쓰도록 보관
+            filteredRows = rows;   // PDF 내보내기가 화면과 같은 범위를 쓰도록 보관
 
             if (rows.length === 0) {
                 tbody.innerHTML = `<tr><td colspan="7" style="padding: 40px; text-align: center; color: var(--text-faint);">검색 결과가 없습니다.</td></tr>`;
@@ -3503,8 +3530,8 @@
                         <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">1. 진단 수행</strong><br>New Assessment 탭에서 SaaS를 선택하고 진단을 실행합니다.</div>
                         <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">2. 결과 확인</strong><br>Executive Summary에서 전체 KPI와 차트를 확인합니다.</div>
                         <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">3. 상세 분석</strong><br>Detailed Report에서 항목별 API 결과를 검색·필터링합니다.</div>
-                        <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">4. 내보내기</strong><br>상세 보고서 화면에서 CSV 파일로 다운로드할 수 있습니다.</div>
-                        <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border); font-size:11.5px; color:var(--text-faint);">지원: Team Dgda · 내부 전용 도구</div>
+                        <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">4. 내보내기</strong><br>Detailed Report 화면에서 PDF 보고서로 내보낼 수 있습니다 (인쇄 대화상자에서 'PDF로 저장' 선택).</div>
+                        <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border); font-size:11.5px; color:var(--text-faint);">Team Dgda · 공개 시연용 데모 (2026 시큐리티아카데미 7기)</div>
                     </div>
                 `;
             }
@@ -3596,12 +3623,9 @@
         /* ── 다크/라이트 모드 적용 ── */
         function applyDarkMode(isDark) {
             document.body.classList.toggle('light-mode', !isDark);
-            // 차트 색상 업데이트
-            if (typeof Chart !== 'undefined') {
-                Chart.defaults.color = isDark ? '#9a9a9a' : '#6b6b6b';
-                if (doughnutChartInst || barChartInst) {
-                    setTimeout(() => renderCharts(summaryData), 80);
-                }
+            // 차트 다시 그리기 — 색은 renderCharts가 바뀐 CSS 변수에서 읽는다
+            if (typeof Chart !== 'undefined' && (doughnutChartInst || barChartInst)) {
+                setTimeout(() => renderCharts(summaryData), 80);
             }
             _rawToast(isDark ? '다크 모드로 전환됨' : '라이트 모드로 전환됨', 'info');
         }
@@ -3699,7 +3723,7 @@
             },
             tab3: {
                 title: 'Detailed Report',
-                body: '실무자용 상세 화면입니다. 항목별 <strong>실제 측정값·판정 기준·호출 API 엔드포인트·조치 권고</strong>를 확인합니다. 판정은 4단계 — 적합(O), 부적합(X), 수집완료(기준값 없음·팀 검토), 수동확인(API 미제공·콘솔 확인). 검색과 필터로 좁히고 CSV로 내보낼 수 있습니다.'
+                body: '실무자용 상세 화면입니다. 항목별 <strong>실제 측정값·판정 기준·호출 API 엔드포인트·조치 권고</strong>를 확인합니다. 판정은 4단계 — 적합(O), 부적합(X), 수집완료(기준값 없음·팀 검토), 수동확인(API 미제공·콘솔 확인). 검색과 필터로 좁히고 PDF 보고서로 내보낼 수 있습니다.'
             },
             donut: {
                 title: '진단 판정 분포',
@@ -3707,7 +3731,7 @@
             },
             priority: {
                 title: '조치 우선순위 분포',
-                body: '판정 결과를 조치 우선순위로 환산한 분포입니다. <strong>부적합 → High(즉시 조치)</strong>, 수집완료 → Medium(30일 내 검토), 적합·수동확인 → Low(분기 점검)로 자동 분류됩니다.'
+                body: '판정 결과를 조치 우선순위로 환산한 분포입니다. <strong>부적합 → High(즉시 조치)</strong>, 수집완료 → Medium(30일 내 검토), 수동확인 → Low(분기 내 콘솔 확인)로 자동 분류되며, 적합 판정 항목은 조치 대상에서 제외됩니다.'
             },
             action: {
                 title: 'Top Priority 목록',
