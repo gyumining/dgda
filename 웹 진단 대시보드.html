@@ -207,7 +207,20 @@
             display: flex;
             flex-direction: column;
             flex-shrink: 0;
+            overflow: hidden;
+            min-width: 0;   /* flex 아이템의 min-width:auto가 자식 고정폭 아래로 줄어드는 것을 막는다 */
+            /* 접기/펼치기 — 화면 내 크기 변화이므로 ease-in-out */
+            transition: width var(--dur-enter) var(--ease-in-out-strong),
+                        border-right-width var(--dur-enter) var(--ease-in-out-strong);
         }
+        .workspace-sidebar.collapsed {
+            width: 0;
+            border-right-width: 0;
+        }
+        /* 접히는 동안 내부 텍스트가 좁은 폭에 맞춰 줄바꿈되지 않도록 폭 고정 */
+        .workspace-sidebar .sidebar-header,
+        .workspace-sidebar .file-explorer,
+        .workspace-sidebar .sidebar-footer { width: 280px; flex-shrink: 0; }
         .sidebar-header {
             padding: 12px 14px;
             display: flex;
@@ -649,6 +662,29 @@
         }
         .run-hint i { width: 14px; height: 14px; color: var(--accent); flex-shrink: 0; }
         .run-hint strong { color: var(--text-normal); font-weight: 600; }
+        .run-hint a {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .run-hint a:hover { text-decoration: underline; }
+
+        /* 투어 종료 직후 Help 아이콘 주목 유도 — 재실행 경로를 한 번 알려준다 */
+        @keyframes helpPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(167, 139, 250, 0); }
+            50% {
+                box-shadow: 0 0 0 8px var(--accent-glow);
+                color: var(--accent);
+                background-color: var(--bg-active);
+            }
+        }
+        /* Help를 누를 때까지 계속 반짝인다 — 주기를 느리게(2s) 해서 다급한 느낌은 줄임.
+           첫 화면을 떠나면(진단 실행·탭 이동) stopHelpPulse()가 멈춘다. */
+        .ribbon-action.attention-pulse { animation: helpPulse 2s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+            .ribbon-action.attention-pulse { animation: none; }
+        }
 
         /* 로딩 오버레이 */
         .loader-overlay {
@@ -719,7 +755,11 @@
             color: var(--text-normal);
             padding-bottom: 18px;
             border-bottom: 1px solid var(--border);
+            word-break: keep-all;   /* 한글이 음절 단위로 끊기지 않게 — 띄어쓰기에서만 줄바꿈 */
         }
+        .hl-body .nowrap { white-space: nowrap; }   /* '44개' '15건이' 같은 숫자+단위 묶음 분리 방지 */
+        /* 후속 조치 문장(수집완료·수동확인)은 판정 요약과 성격이 달라 항상 새 줄에서 시작한다 */
+        .hl-body .hl-followup { display: block; margin-top: 4px; }
         .hl-body .firm   { color: var(--accent); font-weight: 700; }
         .hl-body .n      { font-family: var(--font-mono); font-weight: 700; color: var(--text-bright); }
         .hl-body .danger {
@@ -954,10 +994,11 @@
             margin-top: 5px;
         }
 
-        /* 차트 그리드 */
+        /* 차트 그리드 — minmax(0,1fr): 1fr만 쓰면 캔버스 고유 폭이 트랙의 최소 크기를
+           계속 밀어 올려, 사이드바 접기 등 폭 변화 시 차트가 무한정 커지는 루프가 생긴다 */
         .charts-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
             gap: 18px;
             margin-bottom: 22px;
         }
@@ -1741,7 +1782,8 @@
             .document-title { font-size: 24px; }
             .hl-body { font-size: 17px; }
             .kpi-grid, .gantt-summary { grid-template-columns: repeat(2, 1fr); }
-            .charts-grid, .checkbox-group { grid-template-columns: 1fr; }
+            .charts-grid { grid-template-columns: minmax(0, 1fr); }
+            .checkbox-group { grid-template-columns: 1fr; }
             .gantt-timeline-header, .gantt-row { grid-template-columns: 170px 1fr; }
             .workspace-tabs { overflow-x: auto; }
             .tab-header { flex-shrink: 0; }
@@ -1786,6 +1828,7 @@
             .status-dot { animation: none; }
             .ribbon-panel { animation: none; }
             .info-pop.open { animation: none; }
+            .workspace-sidebar { transition: none; }
         }
 
         /* ============================================
@@ -1891,6 +1934,7 @@
                  onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
             <span class="logo-fallback">D</span>
         </div>
+        <div class="ribbon-action" id="ribbon-sidebar" role="button" tabindex="0" title="사이드바 접기" aria-label="사이드바 접기" aria-expanded="true" onclick="toggleSidebar()"><i data-lucide="panel-left-close"></i></div>
         <div class="ribbon-action active" id="ribbon-dashboard" role="button" tabindex="0" title="Dashboards" aria-label="Dashboards" onclick="setRibbonActive('dashboard')"><i data-lucide="layout-dashboard"></i></div>
         <div class="ribbon-action" id="ribbon-search" role="button" tabindex="0" title="Search" aria-label="Search" onclick="setRibbonActive('search'); toggleRibbonPanel('search')"><i data-lucide="search"></i></div>
         <div class="ribbon-action" id="ribbon-history" role="button" tabindex="0" title="History" aria-label="History" onclick="setRibbonActive('history'); toggleRibbonPanel('history')"><i data-lucide="history"></i></div>
@@ -1915,6 +1959,7 @@
         <div class="sidebar-header">
             <i data-lucide="folder-tree"></i>
             <span class="sidebar-title">Explorer</span>
+            <span class="ico-btn" role="button" tabindex="0" title="사이드바 접기" aria-label="사이드바 접기" onclick="toggleSidebar()"><i data-lucide="panel-left-close"></i></span>
         </div>
 
         <div class="file-explorer">
@@ -2056,7 +2101,8 @@
             </button>
             <div class="run-hint">
                 <i data-lucide="flask-conical"></i>
-                <span>백엔드 연결 없이 <strong>실제 진단 결과 데이터셋</strong>으로 실행됩니다 — 버튼을 눌러 결과를 확인하세요.</span>
+                <span>백엔드 연결 없이 <strong>실제 진단 결과 데이터셋</strong>으로 실행됩니다 — 버튼을 눌러 결과를 확인하세요.
+                    &nbsp;·&nbsp; <a href="#" onclick="event.preventDefault(); startTour();">화면 가이드 다시 보기</a></span>
             </div>
         </div>
 
@@ -2481,6 +2527,9 @@
             // 진행 중인 가이드가 다른 탭 것이면 종료 — 숨은 요소에 하이라이트가 남지 않게
             if (tourIdx >= 0 && tourTab !== tabId) endTour();
 
+            // 첫 화면을 떠나면 가이드 재안내 펄스도 멈춘다
+            if (tabId !== 'tab1') stopHelpPulse();
+
             // 결과 화면 첫 진입 시 요소별 가이드가 이어진다 (탭별·세션당 1회, 결과가 있을 때만)
             if ((tabId === 'tab2' || tabId === 'tab3') && liveData.length > 0 && !tourAlreadySeen(tabId)) {
                 markTourSeen(tabId);
@@ -2510,6 +2559,30 @@
                     switchTab('tab1');
                 }
             }
+        }
+
+        /* ============================================
+           4-1-1. 사이드바 전체 접기/펼치기
+           ============================================ */
+        let sidebarCollapsed = false;
+
+        function toggleSidebar() {
+            sidebarCollapsed = !sidebarCollapsed;
+            document.querySelector('.workspace-sidebar').classList.toggle('collapsed', sidebarCollapsed);
+            const btn = document.getElementById('ribbon-sidebar');
+            if (btn) {
+                const label = sidebarCollapsed ? '사이드바 펼치기' : '사이드바 접기';
+                btn.innerHTML = `<i data-lucide="${sidebarCollapsed ? 'panel-left-open' : 'panel-left-close'}"></i>`;
+                btn.title = label;
+                btn.setAttribute('aria-label', label);
+                btn.setAttribute('aria-expanded', String(!sidebarCollapsed));
+                lucide.createIcons();
+            }
+            // 전환이 끝난 뒤 차트를 최종 컨테이너 폭에 정확히 맞춘다
+            setTimeout(() => {
+                doughnutChartInst?.resize();
+                barChartInst?.resize();
+            }, 250);
         }
 
         /* ============================================
@@ -2553,6 +2626,7 @@
            5. 진단 수행 (목 데이터로 오프라인 시뮬레이션)
            ============================================ */
         async function runAssessment() {
+            stopHelpPulse();   // 다음 행동으로 넘어갔으니 가이드 재안내 펄스는 멈춘다
             const loader = document.getElementById('loader');
             const sub    = document.getElementById('loaderSub');
             loader.classList.add('show');
@@ -2755,11 +2829,11 @@
             const elHL = document.getElementById('exec-headline-body');
             if (elHL) {
                 elHL.innerHTML =
-                    `<span class="firm">Team Dgda</span>가 진단한 ${Object.keys(s.saas_stats).length}개 SaaS 환경에서 ` +
-                    `ISMS-P 보호대책 요구사항 기준 전체 <span class="n">${s.total}</span>개 점검 항목 중 ` +
-                    `<span class="danger">${failRows.length}건이 부적합(X)</span>으로 판정되어 즉시 조치(D+7)가 필요합니다. ` +
-                    `수집완료 <span class="n">${collRows.length}</span>건은 팀 검토, ` +
-                    `수동확인 <span class="n">${manRows.length}</span>건은 관리 콘솔 확인 대상입니다.`;
+                    `<span class="firm">Team Dgda</span>가 진단한 <span class="nowrap">${Object.keys(s.saas_stats).length}개</span> SaaS 환경에서 ` +
+                    `ISMS-P 보호대책 요구사항 기준 전체 <span class="nowrap"><span class="n">${s.total}</span>개</span> 점검 항목 중 ` +
+                    `<span class="danger"><span class="nowrap">${failRows.length}건이</span> 부적합(X)</span>으로 판정되어 즉시 <span class="nowrap">조치(D+7)가</span> 필요합니다. ` +
+                    `<span class="hl-followup">수집완료 <span class="nowrap"><span class="n">${collRows.length}</span>건은</span> 팀 검토, ` +
+                    `수동확인 <span class="nowrap"><span class="n">${manRows.length}</span>건은</span> 관리 콘솔 확인 대상입니다.</span>`;
             }
 
             const elScan = document.getElementById('last-scan-time');
@@ -3471,6 +3545,9 @@
         }
 
         function toggleRibbonPanel(type) {
+            // Help를 여는 순간 안내 펄스는 역할을 다했다
+            if (type === 'help') stopHelpPulse();
+
             const panel = document.getElementById('ribbonPanel');
             const sidebar = document.querySelector('.workspace-sidebar');
 
@@ -3616,6 +3693,11 @@
                         <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">2. 결과 확인</strong><br>Executive Summary에서 전체 KPI와 차트를 확인합니다.</div>
                         <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">3. 상세 분석</strong><br>Detailed Report에서 항목별 API 결과를 검색·필터링합니다.</div>
                         <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">4. 내보내기</strong><br>Detailed Report 화면에서 PDF 보고서로 내보낼 수 있습니다 (인쇄 대화상자에서 'PDF로 저장' 선택).</div>
+
+                        <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">5. Search (항목 검색)</strong><br>왼쪽 리본의 돋보기 아이콘입니다. 진단 항목을 검색하고, 부적합 항목을 눌러 상세 화면으로 바로 이동합니다.</div>
+                        <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">6. History (진단 이력)</strong><br>왼쪽 리본의 시계 아이콘입니다. 진단을 실행한 기록과 실행별 판정 요약·부적합 목록을 봅니다.</div>
+                        <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">7. Settings (설정)</strong><br>왼쪽 리본의 톱니 아이콘입니다. 다크/라이트 모드, 진단 완료 알림, 자동 스케줄 진단을 켜고 끕니다.</div>
+                        <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">8. Explorer (사이드바)</strong><br>왼쪽 파일 탐색기입니다. New Assessment와 보고서 화면으로 이동하며, 하단에 데모 모드 상태와 버전이 표시됩니다.</div>
                         <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border); font-size:11.5px; color:var(--text-faint);">Team Dgda · 공개 시연용 데모 (2026 시큐리티아카데미 7기)</div>
                     </div>
                 `;
@@ -4004,7 +4086,10 @@
             showTourStep(0);
         }
 
+        let helpHintShown = false;   // 재실행 경로 안내는 페이지당 한 번이면 충분하다
+
         function endTour() {
+            const wasRunning = tourIdx >= 0;
             tourIdx = -1;
             tourTab = null;
             document.querySelectorAll('.tour-target').forEach(el => el.classList.remove('tour-target'));
@@ -4012,6 +4097,19 @@
             const pop = document.getElementById('tourPop');
             pop.hidden = true;
             pop.classList.remove('open');
+
+            // 투어를 닫은 직후, 다시 보는 경로(Help)를 알려준다 —
+            // 첫 화면에 머무는 동안만 계속 반짝인다. 사용자가 다음 행동으로 넘어가면
+            // (Help 열기 · 진단 실행 · 다른 탭 이동) 시선을 끌 이유가 없으므로 멈춘다.
+            if (wasRunning && !helpHintShown) {
+                helpHintShown = true;
+                document.getElementById('ribbon-help')?.classList.add('attention-pulse');
+                _rawToast('가이드는 왼쪽 Help 아이콘에서 언제든 다시 볼 수 있어요.', 'info');
+            }
+        }
+
+        function stopHelpPulse() {
+            document.getElementById('ribbon-help')?.classList.remove('attention-pulse');
         }
 
         function showTourStep(idx) {
