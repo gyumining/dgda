@@ -636,6 +636,20 @@
         .btn-primary:active { transform: scale(0.97); }
         .btn-primary i { width: 16px; height: 16px; }
 
+        /* 실행 버튼 아래 데모 안내 한 줄 — 팝오버는 닫으면 사라지므로 상시 안내가 따로 필요하다 */
+        .run-hint {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            margin-top: 14px;
+            font-size: 12.5px;
+            color: var(--text-muted);
+            text-align: center;
+        }
+        .run-hint i { width: 14px; height: 14px; color: var(--accent); flex-shrink: 0; }
+        .run-hint strong { color: var(--text-normal); font-weight: 600; }
+
         /* 로딩 오버레이 */
         .loader-overlay {
             display: none;
@@ -1640,7 +1654,58 @@
             align-items: center;
             gap: 6px;
         }
+        .info-pop-close {
+            margin-left: auto;
+            display: flex;
+            padding: 3px;
+            border: none;
+            background: transparent;
+            border-radius: 4px;
+            color: var(--text-faint);
+            cursor: pointer;
+        }
+        .info-pop-close:hover { background: var(--bg-hover); color: var(--text-normal); }
+        .info-pop-close i { width: 14px; height: 14px; }
         .info-pop-body strong { color: var(--text-normal); font-weight: 600; }
+
+        /* ── 첫 방문 화면 가이드 — 요소별 설명 투어 ── */
+        .tour-dim {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.45);
+            z-index: 900;
+        }
+        /* 현재 단계의 요소만 오버레이 위로 띄운다 — 실제 UI가 그대로 클릭 가능한 스포트라이트 */
+        .tour-target {
+            position: relative;
+            z-index: 901;
+            border-radius: 8px;
+            box-shadow: 0 0 0 3px var(--accent), 0 0 0 9px var(--accent-glow);
+            background-color: var(--bg-primary);
+        }
+        #tourPop { z-index: 950; }
+        .tour-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+        .tour-progress {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--text-faint);
+        }
+        .tour-btns { display: flex; gap: 6px; }
+        .tour-btns .btn-secondary { padding: 5px 12px; font-size: 12px; }
+        .tour-btns .tour-next {
+            background: var(--accent-strong);
+            border-color: var(--accent-strong);
+            color: #fff;
+        }
+        .tour-btns .tour-next:hover { background: var(--accent); border-color: var(--accent); }
 
         /* 데모 데이터 안내 칩 — 공개 시연 시 실시간 수집이 아님을 명시 */
         .demo-chip {
@@ -1989,6 +2054,10 @@
                 <i data-lucide="play"></i>
                 <span>진단 수행 (Run Assessment)</span>
             </button>
+            <div class="run-hint">
+                <i data-lucide="flask-conical"></i>
+                <span>백엔드 연결 없이 <strong>실제 진단 결과 데이터셋</strong>으로 실행됩니다 — 버튼을 눌러 결과를 확인하세요.</span>
+            </div>
         </div>
 
         <!-- ============================================
@@ -2092,7 +2161,7 @@
             </div>
 
             <!-- Action Item 테이블 -->
-            <div class="card" style="padding: 0; overflow: hidden;">
+            <div class="card" id="actionCard" style="padding: 0; overflow: hidden;">
                 <div class="card-title" style="padding: 20px 22px 0;">
                     <i data-lucide="shield-alert" style="color: var(--sev-text-high);"></i>
                     Top Priority — 부적합(X) 즉시 조치 항목 (<span id="action-item-count">—</span>건)
@@ -2225,7 +2294,7 @@
                 </div>
             </div>
 
-            <div class="card" style="padding: 0; overflow: hidden;">
+            <div class="card" id="detailCard" style="padding: 0; overflow: hidden;">
                 <div class="table-wrap">
                     <table>
                         <thead>
@@ -2249,6 +2318,10 @@
 
     <!-- 시연용 화면 설명 팝오버 — 내용은 INFO_CONTENT에서 주입 -->
     <div id="infoPop" class="info-pop" role="dialog" aria-label="화면 설명" hidden></div>
+
+    <!-- 첫 방문 화면 가이드 — 요소별 설명 투어 (내용은 TOUR_STEPS에서 주입) -->
+    <div id="tourDim" class="tour-dim" hidden onclick="endTour()"></div>
+    <div id="tourPop" class="info-pop" role="dialog" aria-label="화면 가이드" hidden></div>
 
     <!-- PDF 보고서 (인쇄 전용) — exportPdf()가 내용을 채운다 -->
     <div id="printReport" aria-hidden="true"></div>
@@ -2403,6 +2476,15 @@
 
             if (tabId === 'tab2') {
                 setTimeout(renderCharts, 50);
+            }
+
+            // 진행 중인 가이드가 다른 탭 것이면 종료 — 숨은 요소에 하이라이트가 남지 않게
+            if (tourIdx >= 0 && tourTab !== tabId) endTour();
+
+            // 결과 화면 첫 진입 시 요소별 가이드가 이어진다 (탭별·세션당 1회, 결과가 있을 때만)
+            if ((tabId === 'tab2' || tabId === 'tab3') && liveData.length > 0 && !tourAlreadySeen(tabId)) {
+                markTourSeen(tabId);
+                startTour(tabId);
             }
         }
 
@@ -3527,6 +3609,9 @@
                 return `
                     <div style="font-size:13px; color:var(--text-muted); line-height:1.8; padding:4px 2px;">
                         <div style="color:var(--accent); font-weight:600; margin-bottom:12px; font-size:14px;">SSPM Console v2.4.1</div>
+                        <button class="btn-secondary" style="width:100%; justify-content:center; margin-bottom:14px;" onclick="closeRibbonPanel(); startTour();">
+                            <i data-lucide="compass"></i> 화면 가이드 다시 보기
+                        </button>
                         <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">1. 진단 수행</strong><br>New Assessment 탭에서 SaaS를 선택하고 진단을 실행합니다.</div>
                         <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">2. 결과 확인</strong><br>Executive Summary에서 전체 KPI와 차트를 확인합니다.</div>
                         <div style="margin-bottom:10px;"><strong style="color:var(--text-normal);">3. 상세 분석</strong><br>Detailed Report에서 항목별 API 결과를 검색·필터링합니다.</div>
@@ -3714,8 +3799,8 @@
            ============================================ */
         const INFO_CONTENT = {
             tab1: {
-                title: '진단 대상 설정 및 수행',
-                body: '진단의 시작점입니다. 점검할 SaaS(Okta·GitHub·Cloudflare·1Password)를 선택하고 테넌트 URL을 입력한 뒤 실행합니다. 실제 서비스에서는 각 SaaS의 <strong>REST API를 호출해 보안 설정값을 수집</strong>하며, 이 데모는 2026년 5월 실제 진단 결과 데이터셋으로 같은 흐름을 재현합니다.'
+                title: 'SSPM Console — Team Dgda 데모',
+                body: 'SaaS 보안 설정을 <strong>ISMS-P 기준으로 자동 진단</strong>하는 SSPM 데모입니다 (2026 시큐리티아카데미 7기 · Team Dgda). 점검할 SaaS(Okta·GitHub·Cloudflare·1Password)를 선택하고 <strong>진단 수행</strong>을 누르세요. 실제 서비스에서는 각 SaaS의 REST API로 보안 설정값을 수집하며, 이 데모는 2026년 5월 실제 진단 결과 데이터셋으로 같은 흐름을 백엔드 없이 재현합니다. 각 화면의 ⓘ 버튼에서 이런 설명을 다시 볼 수 있습니다.'
             },
             tab2: {
                 title: 'Executive Summary',
@@ -3761,7 +3846,11 @@
             if (!c) return;
 
             const pop = document.getElementById('infoPop');
-            pop.innerHTML = `<div class="info-pop-title">${c.title}</div><div class="info-pop-body">${c.body}</div>`;
+            pop.innerHTML =
+                `<div class="info-pop-title"><span>${c.title}</span>` +
+                `<button class="info-pop-close" aria-label="설명 닫기" onclick="closeInfoPop()"><i data-lucide="x"></i></button></div>` +
+                `<div class="info-pop-body">${c.body}</div>`;
+            lucide.createIcons();
 
             // 버튼 아래 왼쪽 정렬로 배치하되 뷰포트를 벗어나면 보정한다
             const r = btn.getBoundingClientRect();
@@ -3794,10 +3883,190 @@
             if (btn) { toggleInfoPop(btn); return; }
             if (openInfoBtn && !e.target.closest('#infoPop')) closeInfoPop();
         });
-        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeInfoPop(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeInfoPop(); endTour(); } });
         // fixed 배치라 스크롤·리사이즈 시 위치가 어긋난다 — 어긋난 채 두느니 닫는다
         window.addEventListener('resize', closeInfoPop);
         document.querySelectorAll('.view-content').forEach(v => v.addEventListener('scroll', closeInfoPop));
+
+        /* ============================================
+           10.6 화면 가이드 — 요소별 설명 투어 (탭별)
+           하나의 팝오버에 설명을 몰아넣는 대신, 화면 요소를 순서대로
+           하이라이트하며 그 옆에 짧은 설명을 붙인다 (다음/이전/완료).
+           tab1은 첫 방문 시, tab2·tab3은 진단 후 첫 진입 시 자동 시작.
+           ============================================ */
+        const TOURS = {
+            tab1: [
+                {
+                    sel: '#view-tab1 .document-title',
+                    title: 'SSPM Console — Team Dgda 데모',
+                    body: 'SaaS 보안 설정을 <strong>ISMS-P 기준으로 자동 진단</strong>하는 SSPM 데모입니다 (2026 시큐리티아카데미 7기 · Team Dgda). 30초 가이드로 화면을 안내해 드릴게요.'
+                },
+                {
+                    sel: '.checkbox-group',
+                    title: '① 진단 타겟 선택',
+                    body: '점검할 SaaS를 고릅니다. <strong>Okta·GitHub·Cloudflare·1Password</strong> 중 복수 선택할 수 있고, 선택에 따라 아래 URL 입력란이 생깁니다.'
+                },
+                {
+                    sel: '#tenantUrlContainer',
+                    title: '② 대상 Tenant URL',
+                    body: '실제 서비스는 이 주소의 <strong>REST API에서 보안 설정값을 수집</strong>합니다. 데모에서는 미리 채워져 있으니 그대로 두면 됩니다.'
+                },
+                {
+                    sel: '.btn-primary',
+                    title: '③ 진단 수행',
+                    body: '누르면 진단이 실행됩니다. 백엔드 없이 <strong>2026년 5월 실제 진단 결과 데이터셋</strong>으로 같은 흐름을 재현합니다.'
+                },
+                {
+                    sel: '.workspace-tabs',
+                    title: '④ 결과 확인',
+                    body: '결과는 두 화면으로 — <strong>Executive Summary</strong>(경영진 요약)와 <strong>Detailed Report</strong>(실무 상세). 진단을 실행하면 각 결과 화면에서 가이드가 이어집니다.'
+                }
+            ],
+            tab2: [
+                {
+                    sel: '.executive-headline',
+                    title: '① 핵심 요약',
+                    body: '진단 결과를 한 문장으로 — 어떤 SaaS 환경에서 몇 건이 <strong>부적합(X)</strong>으로 판정됐고, 무엇이 즉시 조치 대상인지 요약합니다.'
+                },
+                {
+                    sel: '.kpi-grid',
+                    title: '② KPI 카드',
+                    body: '전체 점검 항목·적합·부적합·검토 필요 수를 한눈에 보여줍니다. 모든 수치는 Detailed Report의 항목에서 <strong>자동 집계</strong>됩니다.'
+                },
+                {
+                    sel: '.charts-grid .card:first-child',
+                    title: '③ 진단 판정 분포',
+                    body: '판정은 4단계 — 적합(O)·부적합(X)·<strong>수집완료</strong>(기준값 없음, 팀 검토)·<strong>수동확인</strong>(API 미제공, 콘솔 확인). 가운데 숫자는 적합률입니다.'
+                },
+                {
+                    sel: '.charts-grid .card:last-child',
+                    title: '④ 조치 우선순위',
+                    body: '판정을 조치 우선순위로 환산한 분포입니다. 부적합 → <strong>High(즉시)</strong>, 수집완료 → Medium(30일 내 검토), 수동확인 → Low(분기 내 확인).'
+                },
+                {
+                    sel: '#actionCard',
+                    title: '⑤ Top Priority 목록',
+                    body: '부적합(X) 항목만 추린 즉시 조치 목록입니다. 실제 측정값과 함께 <strong>어느 메뉴에서 무엇을 바꿔야 하는지</strong> 구체적인 조치 권고안을 제공합니다.'
+                },
+                {
+                    sel: '.gantt-section',
+                    title: '⑥ Master Plan 로드맵',
+                    body: '판정 결과가 조치 일정으로 자동 변환됩니다 — <strong>부적합 D+7 · 수집완료 검토 30일 · 수동확인 분기 내</strong> 타임라인으로 남은 조치를 관리합니다.'
+                }
+            ],
+            tab3: [
+                {
+                    sel: '#view-tab3 .page-header',
+                    title: '① Detailed Report',
+                    body: '실무자용 <strong>Raw Data 뷰</strong>입니다. 상단에 전체 레코드 수와 적합·부적합 집계, 마지막 스캔 시각이 표시됩니다.'
+                },
+                {
+                    sel: '#view-tab3 .toolbar',
+                    title: '② 검색과 필터',
+                    body: 'ID·진단 항목·API 엔드포인트로 검색하고, <strong>SaaS · 점검 영역 · ISMS-P 번호 · 판정</strong> 4가지 필터로 결과를 좁힙니다.'
+                },
+                {
+                    sel: '#view-tab3 .toolbar-actions',
+                    title: '③ PDF 내보내기',
+                    body: '현재 필터가 적용된 결과를 <strong>PDF 보고서</strong>(표지·요약·상세 결과·조치 계획)로 저장합니다 — 인쇄 대화상자에서 "PDF로 저장"을 선택하세요.'
+                },
+                {
+                    sel: '#detailCard',
+                    title: '④ 상세 점검 결과',
+                    body: '항목별 <strong>실제 측정값 · 판정 기준값 · 호출 API 엔드포인트 · 상세 사유와 조치 권고</strong>를 확인합니다.'
+                }
+            ]
+        };
+
+        let tourIdx = -1;
+        let tourTab = null;
+        let tourSteps = [];
+
+        /* 탭별 자동 실행은 세션당 1회 — sessionStorage 불가 환경은 메모리로 대체 */
+        const tourSeenMem = new Set();
+        function tourAlreadySeen(key) {
+            if (tourSeenMem.has(key)) return true;
+            try { return !!sessionStorage.getItem('sspm-tour-' + key); } catch (e) { return false; }
+        }
+        function markTourSeen(key) {
+            tourSeenMem.add(key);
+            try { sessionStorage.setItem('sspm-tour-' + key, '1'); } catch (e) {}
+        }
+
+        function startTour(tab) {
+            const activeView = document.querySelector('.view-content.active');
+            const t = TOURS[tab] ? tab : (activeView ? activeView.id.replace('view-', '') : 'tab1');
+            tourSteps = TOURS[t] || TOURS.tab1;
+            tourTab = t;
+            closeInfoPop();
+            switchTab(t);
+            document.getElementById('tourDim').hidden = false;
+            showTourStep(0);
+        }
+
+        function endTour() {
+            tourIdx = -1;
+            tourTab = null;
+            document.querySelectorAll('.tour-target').forEach(el => el.classList.remove('tour-target'));
+            document.getElementById('tourDim').hidden = true;
+            const pop = document.getElementById('tourPop');
+            pop.hidden = true;
+            pop.classList.remove('open');
+        }
+
+        function showTourStep(idx) {
+            const step = tourSteps[idx];
+            const target = step && document.querySelector(step.sel);
+            if (!target) { endTour(); return; }
+            tourIdx = idx;
+
+            document.querySelectorAll('.tour-target').forEach(el => el.classList.remove('tour-target'));
+            target.classList.add('tour-target');
+            // 즉시 스크롤 — smooth로 하면 이동 중에 좌표를 재던 팝오버가 어긋난다
+            target.scrollIntoView({ block: 'center' });
+
+            const pop = document.getElementById('tourPop');
+            const last = idx === tourSteps.length - 1;
+            pop.innerHTML =
+                `<div class="info-pop-title"><span>${step.title}</span>` +
+                `<button class="info-pop-close" aria-label="가이드 닫기" onclick="endTour()"><i data-lucide="x"></i></button></div>` +
+                `<div class="info-pop-body">${step.body}</div>` +
+                `<div class="tour-footer">` +
+                `<span class="tour-progress">${idx + 1} / ${tourSteps.length}</span>` +
+                `<div class="tour-btns">` +
+                (idx > 0 ? `<button class="btn-secondary" onclick="showTourStep(${idx - 1})">이전</button>` : '') +
+                `<button class="btn-secondary tour-next" onclick="${last ? 'endTour()' : `showTourStep(${idx + 1})`}">${last ? '완료' : '다음'}</button>` +
+                `</div></div>`;
+            lucide.createIcons();
+            positionTourPop(target);
+            pop.classList.remove('open');
+            void pop.offsetWidth;
+            pop.classList.add('open');
+        }
+
+        function positionTourPop(target) {
+            const pop = document.getElementById('tourPop');
+            const r = target.getBoundingClientRect();
+            const w = Math.min(340, window.innerWidth - 32);
+            pop.style.width = w + 'px';
+            pop.hidden = false;
+            const left = Math.min(Math.max(16, r.left), window.innerWidth - 16 - w);
+            let top = r.bottom + 14;
+            if (top + pop.offsetHeight > window.innerHeight - 12) {
+                top = Math.max(12, r.top - 14 - pop.offsetHeight);
+            }
+            pop.style.left = left + 'px';
+            pop.style.top = top + 'px';
+        }
+
+        /* 스크롤·리사이즈 시 현재 단계 위치를 따라간다 (info-pop과 달리 닫지 않는다) */
+        function repositionTour() {
+            if (tourIdx < 0 || !tourSteps[tourIdx]) return;
+            const target = document.querySelector(tourSteps[tourIdx].sel);
+            if (target) positionTourPop(target);
+        }
+        window.addEventListener('resize', repositionTour);
+        document.querySelectorAll('.view-content').forEach(v => v.addEventListener('scroll', repositionTour));
 
         /* ============================================
            11. 초기화
@@ -3821,6 +4090,14 @@
             renderDetailedTable();
 
             lucide.createIcons();
+
+            // 첫 화면이 빈 폼이라 처음 온 방문자는 이 데모가 무엇인지 알기 어렵다 —
+            // 요소별 설명 투어를 자동으로 시작한다 (X·오버레이 클릭·Esc로 종료, Help에서 다시 보기).
+            // 새로고침마다 다시 뜨면 시연에 방해되므로 세션당 한 번만 자동으로 연다.
+            if (!tourAlreadySeen('tab1')) {
+                markTourSeen('tab1');
+                startTour('tab1');
+            }
         });
     </script>
 
