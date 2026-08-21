@@ -83,7 +83,7 @@
 
 ## 다음 작업 방향
 
-**[PLAN.md](PLAN.md)에 단계별 실행 계획이 확정되어 있다 — 파생 코드 작업은 반드시 그 문서를 먼저 읽고 시작할 것.**
+**[PLAN.md](PLAN.md)에 단계별 실행 계획이, [docs/DESIGN.md](docs/DESIGN.md)에 상세 기술 명세(스키마·판별식 규칙 형식·44개 항목별 명세·CLI 정의)가 확정되어 있다 — 파생 코드 작업은 반드시 두 문서를 먼저 읽고 시작할 것.**
 요지: 실제 API 진단 수집기(`tools/collector`, Python CLI)와 보고서 자동 생성기(`tools/report`)를 만들며,
 두 도구는 `MOCK_DATA` 구조 기반의 공통 결과 JSON 스키마를 계약으로 공유한다.
 

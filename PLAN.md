@@ -6,6 +6,10 @@
 
 > 진행하면서 각 Phase의 체크박스를 갱신하고, 설계가 바뀌면 이 문서와 CLAUDE.md를 함께 커밋할 것.
 
+> **구현 세부 명세는 [docs/DESIGN.md](docs/DESIGN.md)에 있다** — 결과 JSON 스키마 전문,
+> 판별식 규칙 파일 형식, 44개 항목별 엔드포인트·evaluator 표, CLI·환경변수 정의, 오류 처리 정책.
+> 각 Phase 착수 전에 해당 섹션을 먼저 읽을 것.
+
 ## 목표
 
 1. **`tools/collector`** — Okta·GitHub·Cloudflare·1Password API를 실제로 호출해, 팀이 설계한
